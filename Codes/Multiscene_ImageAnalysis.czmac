@@ -1,0 +1,119 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Script>
+  <Context>Zen26</Context>
+  <Version>1.0</Version>
+  <Language>Python</Language>
+  <Text>#######################################################
+## MULTISCENE IMAGE ANALYSIS
+##
+## Macro name: Multiscene_ImageAnalysis.czmac (ZEN core)
+##
+## Required files: workbench with an image as output (LoadImage or Acquise), MyAnalysisSetting.czias
+##
+## Required modules: Image Analysis Setting (Multiscene_ImageAnalysis_Setting.czias in this example)
+##
+## LOAD IMAGE, LOAD IMAGE ANALYSIS SETTING,
+## ANALYZE THE IMAGE TO TABLE, EXTRACT AND SAVE 
+## INDIVIDUAL DATA TABLES (region and regions for each class)
+## 
+## Copyright(C) 2019 by Carl Zeiss Microscopy GmbH.
+## Permission is granted to use, modify and distribute this code,
+## as long as this copyright notice remains part of the code.
+## 
+#######################################################
+##
+##
+## Clear the ZEN macro editor
+Zen.Application.MacroEditor.ClearMessages()
+##
+## Import required libraries
+from System.IO import File, Directory, Path
+##
+## User-defined function to get the base filename without extension 
+def getshortfiles(filelist):
+    files_short = []
+    for short in filelist:
+        files_short.append(Path.GetFileNameWithoutExtension(short))
+    
+    return files_short
+##
+## Path to image analysis setting (from the WorkgroupDocuments)
+docfolder  = Zen.Application.Environment.GetFolderPath(ZenSpecialFolder.WorkgroupDocuments)
+iasfiles = Directory.GetFiles(Path.Combine(docfolder, 'Image Analysis Settings'),'*.czias')
+iasfiles_short = getshortfiles(iasfiles)
+##
+## Specify the default destination folder to save data tables
+outfolder = r'C:\OAD\Output\CSV Tables'
+##
+## GUI for the application
+GUIDialog = ZenWindow()
+GUIDialog.Initialize('Multiscene Image Analysis OAD')
+## Add components to GUI dialog
+GUIDialog.AddLabel('1) Select the desired image analysis setting')
+GUIDialog.AddDropDown('setting', 'Image analysis setting', iasfiles_short, 0)
+GUIDialog.AddLabel('2) Specify the destination folder to save the data tables')
+GUIDialog.AddFolderBrowser('destfolder', 'Destination folder for Data Tables', outfolder)
+## Show the GUI window
+result = GUIDialog.Show()
+## Show message if the execution is cancelled by the user
+if result.HasCanceled:
+    Zen.Windows.Show('Macro was canceled by user!')
+##
+## Get user-defined values
+setting = str(result.GetValue('setting'))
+destfolder = str(result.GetValue('destfolder'))
+##read input multiscene image from the ActiveWorkbench
+image = Zen.Application.ActiveWorkbench.GetDefaultInputValue()
+##
+## check, if active document is available 
+if image is None: 
+    text = 'No document available!\nPlease load/snap a multiscene image and restart macro.'
+    Zen.Application.Pause(text)
+else:
+    ## show the document
+    Zen.Application.ActiveDocument = image
+    ##
+    ## check, if the document is an image
+    if not image.IsZenImage:
+        text = 'Document is not an image.\nPlease load/snap a multiscene image and restart macro.'
+        Zen.Application.Pause(text)
+    ##
+    ## Perform multiscene image analysis setting if the input image is a multiscene image
+    elif(image.Metadata.TilesInfo&gt;1):
+        ##
+        ## Split multiscene image into an array of images
+        imgs = Zen.Processing.Utilities.SplitScenesToArray(image)
+        ## Scene number counter
+        scene_num = 0
+        ## Load the selected image analysis setting
+        ias = ZenImageAnalysisSetting()
+        iasName = setting + '.czias'
+        ias.Load(iasName,ZenImageAnalysisSettingDirectory.User)
+        ## Load image automatically
+        for img in imgs:
+            scene_num = scene_num+1
+            ## Analyze the image to table (generates list)
+            list = Zen.Analyzing.AnalyzeToTable(img,ias)
+            ## Extract and show tables of all classes
+            for i in range (0,list.Count): 
+                listName = list[i].FileName
+                table = Zen.Analyzing.GetTable(listName,list)
+                Zen.Application.Documents.Add(table)
+                ## define table path and file name
+                tableFileName = Path.Combine(destfolder,listName +'_Scene'+str(scene_num)+ '.csv')
+                ## save the data table
+                table.Save(tableFileName)
+            ## show message where data tables are saved
+            Zen.Application.Pause('Data tables are saved in: ' + destfolder)
+    else:
+       Zen.Windows.Show('Not a multiscene image!')
+##
+#######################################################
+
+</Text>
+  <Author></Author>
+  <Description></Description>
+  <Keywords></Keywords>
+  <Row>86</Row>
+  <Column>64</Column>
+</Script>
